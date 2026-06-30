@@ -204,7 +204,78 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    @media (max-width: 768px) { .tasks-panel { display: none; } .notes-grid { grid-template-columns: 1fr; } }
+    /* ── MOBILE ── */
+    @media (max-width: 768px) {
+      :root { --header-h: 52px; }
+
+      /* Header */
+      .app-header { padding: 0 10px; gap: 6px; }
+      .app-logo { font-size: 13px; }
+      #user-email-label { display: none; }
+      #sign-out-btn { padding: 6px 10px; font-size: 12px; }
+      .search-wrap { max-width: none; }
+
+      /* Tab bar — Board tab hidden on mobile */
+      .tab-bar { padding: 0 6px; gap: 0; }
+      .tab-btn { padding: 10px 10px; font-size: 12px; flex: 1; white-space: nowrap; }
+      #tab-board { display: none; }
+      .space-toggle { margin: 6px 0; flex-shrink: 0; }
+      .space-btn { padding: 4px 10px; font-size: 11px; }
+
+      /* Body — single panel at a time */
+      .app-body { flex-direction: column; }
+      .tasks-panel { width: 100%; border-right: none; border-bottom: 1px solid var(--border); flex-shrink: 0; max-height: 100%; }
+      .notes-area { min-height: 0; }
+
+      /* Task form — stack fields */
+      .add-task-meta { flex-direction: column; }
+      .add-task-meta select, .add-task-meta input[type="date"] { min-width: unset; width: 100%; font-size: 14px; padding: 8px 10px; }
+      .add-task-row input { font-size: 14px; padding: 8px 10px; }
+
+      /* Bigger tap targets */
+      .task-check { width: 22px; height: 22px; border-radius: 5px; }
+      .task-item { padding: 12px 14px; gap: 12px; }
+      .task-title { font-size: 14px; }
+
+      /* Always show actions on touch */
+      .note-card-actions { opacity: 1; }
+      .task-actions { opacity: 1; }
+      .btn-icon { padding: 8px; }
+
+      /* Notes grid */
+      .notes-grid { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
+      .notes-toolbar { padding: 8px 12px; }
+      .tag-filter-bar { padding: 6px 12px; }
+
+      /* Editor — bottom sheet */
+      .editor-overlay { padding: 0; align-items: flex-end; }
+      .editor-modal {
+        border-radius: 20px 20px 0 0;
+        max-width: 100%;
+        max-height: 96vh;
+        box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
+      }
+      .editor-header { padding: 14px 16px; }
+      .editor-header input { font-size: 16px; }
+      .editor-meta { padding: 8px 14px; gap: 6px; flex-wrap: wrap; }
+      .editor-meta select { font-size: 14px; }
+      .editor-tags-input { min-width: 100%; font-size: 14px; }
+      .editor-tabs { width: 100%; }
+      .editor-tab { flex: 1; text-align: center; font-size: 13px; }
+      #note-creator-label { display: none; }
+      .editor-textarea { min-height: 180px; padding: 14px 16px; font-size: 14px; }
+      .editor-preview { min-height: 180px; padding: 14px 16px; }
+      .editor-footer { padding: 10px 14px; flex-direction: column-reverse; align-items: stretch; gap: 10px; }
+      .editor-footer > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+      .editor-footer .btn { min-height: 40px; }
+
+      .toast { bottom: 16px; right: 12px; left: 12px; text-align: center; }
+    }
+
+    /* Prevent iOS zoom on input focus */
+    @supports (-webkit-touch-callout: none) {
+      .field input, .add-task-row input, .search-wrap input { font-size: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -242,7 +313,7 @@
         <div class="user-avatar" id="user-avatar">AK</div>
         <span id="user-email-label"></span>
       </div>
-      <button class="btn btn-ghost" onclick="signOut()">Sign out</button>
+      <button class="btn btn-ghost" id="sign-out-btn" onclick="signOut()">Sign out</button>
     </div>
   </header>
 
@@ -452,7 +523,7 @@
       document.getElementById('archive-toggle-btn').textContent = 'Show archived';
       document.getElementById('archive-toggle-btn').classList.remove('active');
       document.getElementById('search-input').value = '';
-      switchTab('board');
+      switchTab(isMobile() ? 'notes' : 'board');
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
       const email = currentUser.email || '';
@@ -925,11 +996,19 @@
   }
 
   // ─── UI CONTROLS ───
+  function isMobile() { return window.innerWidth <= 768; }
+
   function switchTab(tab) {
     currentTab = tab;
     ['board','notes','tasks'].forEach(t => document.getElementById(`tab-${t}`).classList.toggle('active', t === tab));
-    document.getElementById('tasks-panel').style.display = (tab === 'board' || tab === 'tasks') ? 'flex' : 'none';
-    document.getElementById('notes-area').style.display = (tab === 'board' || tab === 'notes') ? 'flex' : 'none';
+    if (isMobile()) {
+      // On mobile: Notes tab = notes only, Tasks tab = tasks only
+      document.getElementById('tasks-panel').style.display = tab === 'tasks' ? 'flex' : 'none';
+      document.getElementById('notes-area').style.display = tab === 'tasks' ? 'none' : 'flex';
+    } else {
+      document.getElementById('tasks-panel').style.display = (tab === 'board' || tab === 'tasks') ? 'flex' : 'none';
+      document.getElementById('notes-area').style.display = (tab === 'board' || tab === 'notes') ? 'flex' : 'none';
+    }
   }
 
   function switchSpace(space) {
@@ -995,6 +1074,11 @@
       e.preventDefault();
       if (document.getElementById('editor-overlay').classList.contains('open')) saveNote();
     }
+  });
+
+  // Re-apply layout on orientation change / resize
+  window.addEventListener('resize', () => {
+    if (currentUser) switchTab(currentTab);
   });
 </script>
 </body>
