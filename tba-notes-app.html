@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBA Notes</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f8f8f7;
+      --surface: #ffffff;
+      --border: #e5e5e3;
+      --text: #1a1a1a;
+      --text-muted: #888;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #dc2626;
+      --green: #16a34a;
+      --yellow: #d97706;
+      --tag-personal: #ede9fe;
+      --tag-personal-text: #6d28d9;
+      --tag-shared: #dbeafe;
+      --tag-shared-text: #1d4ed8;
+      --priority-high: #fee2e2;
+      --priority-high-text: #dc2626;
+      --priority-medium: #fef3c7;
+      --priority-medium-text: #d97706;
+      --priority-low: #dcfce7;
+      --priority-low-text: #16a34a;
+      --sidebar-w: 320px;
+      --header-h: 56px;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+    /* ── AUTH ── */
+    #auth-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 40px; width: 100%; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .auth-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .auth-card p { color: var(--text-muted); margin-bottom: 28px; font-size: 13px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .field input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.15s; background: var(--bg); }
+    .field input:focus { border-color: var(--accent); background: #fff; }
+    .auth-error { color: var(--danger); font-size: 13px; margin-bottom: 12px; display: none; }
+
+    /* ── BUTTONS ── */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; white-space: nowrap; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+    .btn-ghost.active { background: var(--bg); color: var(--text); border-color: var(--text-muted); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid #fecaca; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn-warning { background: transparent; color: var(--yellow); border: 1px solid #fde68a; }
+    .btn-warning:hover { background: #fef3c7; }
+    .btn-full { width: 100%; justify-content: center; }
+    .btn-icon { padding: 6px; border-radius: 6px; background: transparent; border: none; cursor: pointer; color: var(--text-muted); transition: all 0.15s; }
+    .btn-icon:hover { background: var(--bg); color: var(--text); }
+
+    /* ── APP SHELL ── */
+    #app { display: none; flex-direction: column; height: 100vh; }
+
+    .app-header { height: var(--header-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0; position: sticky; top: 0; z-index: 100; }
+    .app-logo { font-weight: 800; font-size: 15px; color: var(--text); white-space: nowrap; }
+    .app-logo span { color: var(--accent); }
+    .search-wrap { flex: 1; max-width: 400px; position: relative; }
+    .search-wrap input { width: 100%; padding: 7px 12px 7px 34px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); outline: none; }
+    .search-wrap input:focus { border-color: var(--accent); background: #fff; }
+    .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+    .header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .user-badge { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; transition: background 0.4s; }
+    .live-dot.connected { background: #16a34a; box-shadow: 0 0 0 2px #dcfce7; }
+    .live-dot.error { background: var(--danger); }
+
+    .tab-bar { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 4px; flex-shrink: 0; }
+    .tab-btn { padding: 10px 16px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--text-muted); border-bottom: 2px solid transparent; transition: all 0.15s; margin-bottom: -1px; }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    .space-toggle { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+    .space-btn { padding: 5px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; background: none; color: var(--text-muted); transition: all 0.15s; }
+    .space-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+    .app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── TASKS PANEL ── */
+    .tasks-panel { width: var(--sidebar-w); border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+    .panel-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .panel-title { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .count-badge { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+
+    .add-task-form { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .add-task-row { display: flex; gap: 6px; }
+    .add-task-row input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; }
+    .add-task-row input:focus { border-color: var(--accent); }
+    .add-task-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+    .add-task-meta select, .add-task-meta input[type="date"] { flex: 1; min-width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; outline: none; background: var(--bg); color: var(--text); }
+
+    .task-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .task-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    .task-item:hover { background: var(--bg); }
+    .task-item:last-child { border-bottom: none; }
+    .task-check { width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--border); cursor: pointer; flex-shrink: 0; margin-top: 2px; appearance: none; -webkit-appearance: none; transition: all 0.15s; }
+    .task-check:checked { background: var(--accent); border-color: var(--accent); background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.293 4.293a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414 0l-3-3a1 1 0 1 1 1.414-1.414L6.586 9.586l5.293-5.293a1 1 0 0 1 1.414 0z'/%3E%3C/svg%3E"); background-size: cover; }
+    .task-body { flex: 1; min-width: 0; }
+    .task-title { font-size: 13px; line-height: 1.4; word-break: break-word; }
+    .task-title.done { text-decoration: line-through; color: var(--text-muted); }
+    .task-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .priority-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .priority-high { background: var(--priority-high); color: var(--priority-high-text); }
+    .priority-medium { background: var(--priority-medium); color: var(--priority-medium-text); }
+    .priority-low { background: var(--priority-low); color: var(--priority-low-text); }
+    .due-date { font-size: 11px; color: var(--text-muted); }
+    .due-date.overdue { color: var(--danger); font-weight: 600; }
+    .visibility-pill { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+    .vis-shared { background: var(--tag-shared); color: var(--tag-shared-text); }
+    .vis-personal { background: var(--tag-personal); color: var(--tag-personal-text); }
+    .creator-label { font-size: 10px; color: var(--text-muted); }
+    .assignee-badge { width: 20px; height: 20px; border-radius: 50%; background: #e0f2fe; color: #0369a1; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .task-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+    .task-item:hover .task-actions { opacity: 1; }
+
+    .empty-state { padding: 32px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .empty-state svg { margin-bottom: 8px; opacity: 0.3; }
+
+    /* ── NOTES AREA ── */
+    .notes-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .notes-toolbar { padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+    .notes-toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .notes-space-label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+    /* tag filter bar */
+    .tag-filter-bar { padding: 8px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: var(--surface); }
+    .tag-filter-btn { padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); background: transparent; font-size: 11px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .tag-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .tag-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tag-filter-label { font-size: 11px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+
+    .notes-grid { flex: 1; overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; align-content: start; }
+    .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s; position: relative; }
+    .note-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-1px); }
+    .note-card.pinned { border-color: var(--accent); }
+    .note-card.archived-card { opacity: 0.6; }
+    .note-pin-icon { position: absolute; top: 10px; right: 10px; color: var(--accent); font-size: 14px; }
+    .note-archived-icon { position: absolute; top: 10px; right: 10px; color: var(--text-muted); font-size: 12px; }
+    .note-card-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; line-height: 1.3; padding-right: 20px; }
+    .note-card-preview { font-size: 12px; color: var(--text-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .note-card-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+    .note-tag { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .note-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 6px; }
+    .note-card-date { font-size: 11px; color: var(--text-muted); }
+    .note-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+    .note-card:hover .note-card-actions { opacity: 1; }
+
+    /* ── NOTE EDITOR OVERLAY ── */
+    .editor-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .editor-overlay.open { display: flex; }
+    .editor-modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 820px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .editor-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .editor-header input { flex: 1; font-size: 18px; font-weight: 700; border: none; outline: none; background: none; color: var(--text); }
+    .editor-header input::placeholder { color: var(--text-muted); }
+    .editor-meta { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .editor-meta select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; outline: none; background: var(--bg); }
+    .editor-tags-input { flex: 1; min-width: 160px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; outline: none; background: var(--bg); }
+    .editor-tags-input:focus { border-color: var(--accent); }
+    .editor-tabs { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
+    .editor-tab { padding: 4px 12px; border-radius: 5px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; background: none; color: var(--text-muted); transition: all 0.15s; }
+    .editor-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+    .editor-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .editor-textarea { flex: 1; padding: 20px; font-size: 14px; line-height: 1.7; border: none; outline: none; resize: none; font-family: 'SF Mono', 'Fira Code', monospace; background: none; color: var(--text); min-height: 260px; }
+    .editor-preview { flex: 1; padding: 20px; overflow-y: auto; line-height: 1.7; min-height: 260px; }
+    .editor-preview h1 { font-size: 20px; margin-bottom: 12px; }
+    .editor-preview h2 { font-size: 17px; margin: 16px 0 8px; }
+    .editor-preview h3 { font-size: 15px; margin: 14px 0 6px; }
+    .editor-preview p { margin-bottom: 10px; }
+    .editor-preview ul, .editor-preview ol { padding-left: 20px; margin-bottom: 10px; }
+    .editor-preview li { margin-bottom: 4px; }
+    .editor-preview code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+    .editor-preview pre { background: var(--bg); padding: 14px; border-radius: 8px; overflow-x: auto; margin-bottom: 10px; }
+    .editor-preview pre code { background: none; padding: 0; }
+    .editor-preview blockquote { border-left: 3px solid var(--border); padding-left: 14px; color: var(--text-muted); margin-bottom: 10px; }
+    .editor-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .pin-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+    .pin-toggle input { cursor: pointer; }
+
+    /* ── LOADING / TOAST ── */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 32px; color: var(--text-muted); font-size: 13px; gap: 8px; }
+    .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #1a1a1a; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 500; opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 768px) { .tasks-panel { display: none; } .notes-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<!-- ── AUTH ── -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <h1>TBA Notes</h1>
+    <p>Sign in to access your workspace</p>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="••••••••" onkeydown="if(event.key==='Enter') signIn()" />
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+    <button class="btn btn-primary btn-full" id="sign-in-btn" onclick="signIn()">Sign in</button>
+  </div>
+</div>
+
+<!-- ── APP ── -->
+<div id="app">
+
+  <header class="app-header">
+    <div class="app-logo">TBA <span>Notes</span></div>
+    <div class="search-wrap">
+      <svg class="search-icon" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+      <input type="text" id="search-input" placeholder="Search notes and tasks..." oninput="handleSearch(this.value)" />
+    </div>
+    <div class="header-right">
+      <div class="user-badge">
+        <div class="live-dot" id="live-dot" title="Realtime sync status"></div>
+        <div class="user-avatar" id="user-avatar">AK</div>
+        <span id="user-email-label"></span>
+      </div>
+      <button class="btn btn-ghost" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-board" onclick="switchTab('board')">Board</button>
+    <button class="tab-btn" id="tab-notes" onclick="switchTab('notes')">Notes only</button>
+    <button class="tab-btn" id="tab-tasks" onclick="switchTab('tasks')">Tasks only</button>
+    <div style="flex:1"></div>
+    <div class="space-toggle" style="margin: 8px 0;">
+      <button class="space-btn active" id="space-personal" onclick="switchSpace('personal')">My Space</button>
+      <button class="space-btn" id="space-shared" onclick="switchSpace('shared')">Team</button>
+    </div>
+  </div>
+
+  <div class="app-body" id="app-body">
+
+    <!-- Tasks panel -->
+    <div class="tasks-panel" id="tasks-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          Tasks <span class="count-badge" id="task-count">0</span>
+        </div>
+      </div>
+
+      <div class="add-task-form" id="add-task-form">
+        <div class="add-task-row">
+          <input type="text" id="new-task-input" placeholder="Add a task..." onkeydown="if(event.key==='Enter') addTask()" />
+          <button class="btn btn-primary" onclick="addTask()">Add</button>
+        </div>
+        <div class="add-task-meta">
+          <select id="new-task-priority">
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="low">Low</option>
+          </select>
+          <input type="date" id="new-task-due" />
+          <select id="new-task-assignee">
+            <option value="">Unassigned</option>
+          </select>
+          <select id="new-task-visibility">
+            <option value="personal">My Space</option>
+            <option value="shared">Team</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="task-list" id="task-list">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+      </div>
+    </div>
+
+    <!-- Notes area -->
+    <div class="notes-area" id="notes-area">
+      <div class="notes-toolbar">
+        <div class="notes-toolbar-left">
+          <div class="notes-space-label" id="notes-space-label">My Notes</div>
+          <button class="btn btn-ghost" id="archive-toggle-btn" onclick="toggleShowArchived()" style="font-size:12px;padding:5px 10px;">Show archived</button>
+        </div>
+        <button class="btn btn-primary" onclick="openNoteEditor(null)">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+          New Note
+        </button>
+      </div>
+
+      <!-- Tag filter bar -->
+      <div class="tag-filter-bar" id="tag-filter-bar" style="display:none;">
+        <span class="tag-filter-label">Filter:</span>
+        <button class="tag-filter-btn active" onclick="setTagFilter(null, this)">All</button>
+      </div>
+
+      <div class="notes-grid" id="notes-grid">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── NOTE EDITOR ── -->
+<div class="editor-overlay" id="editor-overlay" onclick="handleOverlayClick(event)">
+  <div class="editor-modal">
+    <div class="editor-header">
+      <input type="text" id="note-title-input" placeholder="Note title..." />
+      <button class="btn-icon" onclick="closeNoteEditor()">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </button>
+    </div>
+    <div class="editor-meta">
+      <select id="note-visibility">
+        <option value="personal">My Space</option>
+        <option value="shared">Team (shared)</option>
+      </select>
+      <input type="text" class="editor-tags-input" id="note-tags-input" placeholder="Labels: ops, outreach, client (comma separated)" />
+      <div class="editor-tabs">
+        <button class="editor-tab active" id="etab-write" onclick="switchEditorTab('write')">Write</button>
+        <button class="editor-tab" id="etab-preview" onclick="switchEditorTab('preview')">Preview</button>
+      </div>
+      <div style="flex:1;text-align:right;">
+        <span id="note-creator-label" style="font-size:11px;color:var(--text-muted);"></span>
+      </div>
+    </div>
+    <div class="editor-body">
+      <textarea class="editor-textarea" id="note-content-input" placeholder="Write your note here... (Markdown supported)"></textarea>
+      <div class="editor-preview" id="note-preview" style="display:none;"></div>
+    </div>
+    <div class="editor-footer">
+      <label class="pin-toggle">
+        <input type="checkbox" id="note-pinned" /> Pin this note
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-warning" id="note-archive-btn" onclick="archiveNote()" style="display:none;">Archive</button>
+        <button class="btn btn-warning" id="note-unarchive-btn" onclick="unarchiveNote()" style="display:none;">Unarchive</button>
+        <button class="btn btn-danger" id="note-delete-btn" onclick="deleteNote()" style="display:none;">Delete</button>
+        <button class="btn btn-ghost" onclick="closeNoteEditor()">Cancel</button>
+        <button class="btn btn-primary" id="note-save-btn" onclick="saveNote()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ─── CONFIG — paste your Supabase URL and anon key here ───
+  const SUPABASE_URL = 'https://fyzyexpbjykvaukkqrug.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_3fys6Ejzmea7FjC1Ns-UBw_VlJMw9op';
+
+  // ─── SECURITY — RLS IS THE REAL ACCESS CONTROL ───
+  // "My Space" vs "Team" filtering is client-side only.
+  // Without RLS, any logged-in user can read all rows via devtools / raw API.
+  // Confirm these policies are active in Supabase before deploying:
+  //
+  //   notes: SELECT  → user_id = auth.uid() OR visibility = 'shared'
+  //   notes: INSERT  → user_id = auth.uid()
+  //   notes: UPDATE  → user_id = auth.uid()
+  //   notes: DELETE  → user_id = auth.uid()
+  //
+  //   tasks: SELECT  → user_id = auth.uid() OR visibility = 'shared'
+  //   tasks: INSERT  → user_id = auth.uid()
+  //   tasks: UPDATE  → user_id = auth.uid() OR visibility = 'shared'
+  //   tasks: DELETE  → user_id = auth.uid()
+
+  // Team members — add names/emails here as you onboard people.
+  // These appear in the task assignee dropdown.
+  const TEAM_MEMBERS = [
+    { label: 'AK', email: 'agarwal.akshay0736@gmail.com' },
+    { label: 'Sanjana', email: 'agarwal.sanjana0736@gmail.com' },
+  ];
+
+  // ─── INIT ───
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let currentSpace = 'personal';
+  let currentTab = 'board';
+  let editingNoteId = null;
+  let allNotes = [];
+  let allTasks = [];
+  let searchQuery = '';
+  let activeTagFilter = null;
+  let showArchived = false;
+  let realtimeChannel = null;
+
+  // ─── AUTH ───
+  async function signIn() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const btn = document.getElementById('sign-in-btn');
+    const errEl = document.getElementById('auth-error');
+    if (!email || !password) { showAuthError('Please enter email and password.'); return; }
+    btn.disabled = true; btn.textContent = 'Signing in...';
+    errEl.style.display = 'none';
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    btn.disabled = false; btn.textContent = 'Sign in';
+    if (error) showAuthError(error.message);
+  }
+
+  function showAuthError(msg) {
+    const el = document.getElementById('auth-error');
+    el.textContent = msg; el.style.display = 'block';
+  }
+
+  async function signOut() {
+    if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+    await sb.auth.signOut();
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('live-dot').className = 'live-dot';
+    currentUser = null;
+  }
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      // Skip full re-init on TOKEN_REFRESHED / tab refocus for an already-loaded user.
+      if (currentUser && currentUser.id === session.user.id) return;
+      currentUser = session.user;
+      // Reset UI state on each login to avoid stale space/tab from previous session
+      currentSpace = 'personal';
+      currentTab = 'board';
+      showArchived = false;
+      activeTagFilter = null;
+      searchQuery = '';
+      document.getElementById('space-personal').classList.add('active');
+      document.getElementById('space-shared').classList.remove('active');
+      document.getElementById('notes-space-label').textContent = 'My Notes';
+      document.getElementById('archive-toggle-btn').textContent = 'Show archived';
+      document.getElementById('archive-toggle-btn').classList.remove('active');
+      document.getElementById('search-input').value = '';
+      switchTab('board');
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      const email = currentUser.email || '';
+      document.getElementById('user-avatar').textContent = email.slice(0, 2).toUpperCase();
+      document.getElementById('user-email-label').textContent = email;
+      populateAssigneeDropdown();
+      await loadAll();
+      setupRealtime();
+    }
+  });
+
+  function populateAssigneeDropdown() {
+    const sel = document.getElementById('new-task-assignee');
+    sel.innerHTML = '<option value="">Unassigned</option>';
+    TEAM_MEMBERS.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.label;
+      opt.textContent = m.label;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ─── REALTIME ───
+  // Requires realtime enabled on both tables in Supabase:
+  //   ALTER PUBLICATION supabase_realtime ADD TABLE notes, tasks;
+  // Or enable via Table Editor > ... > Enable Realtime for each table.
+
+  function setupRealtime() {
+    if (realtimeChannel) sb.removeChannel(realtimeChannel);
+
+    const dot = document.getElementById('live-dot');
+    dot.className = 'live-dot'; // grey = connecting
+
+    realtimeChannel = sb.channel('tba-notes-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, handleNoteChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, handleTaskChange)
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          dot.className = 'live-dot connected';
+          dot.title = 'Live — syncing in real time';
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          dot.className = 'live-dot error';
+          dot.title = 'Realtime disconnected — reload to reconnect';
+        }
+      });
+  }
+
+  function handleNoteChange({ eventType, new: row, old: oldRow }) {
+    if (eventType === 'INSERT') {
+      // Skip if we already have it (own insert already added it locally)
+      if (!allNotes.find(n => n.id === row.id)) {
+        allNotes.unshift(row);
+        renderNotes();
+        buildTagFilterBar();
+      }
+    } else if (eventType === 'UPDATE') {
+      const idx = allNotes.findIndex(n => n.id === row.id);
+      if (idx > -1) {
+        // Don't overwrite a note the current user is actively editing
+        if (editingNoteId === row.id && row.user_id !== currentUser.id) {
+          toast('This note was updated by a teammate');
+        }
+        allNotes[idx] = row;
+      } else {
+        allNotes.unshift(row); // became visible (e.g. flipped to shared)
+      }
+      renderNotes();
+      buildTagFilterBar();
+    } else if (eventType === 'DELETE') {
+      allNotes = allNotes.filter(n => n.id !== oldRow.id);
+      if (editingNoteId === oldRow.id) {
+        closeNoteEditor();
+        toast('This note was deleted by its owner');
+      }
+      renderNotes();
+      buildTagFilterBar();
+    }
+  }
+
+  function handleTaskChange({ eventType, new: row, old: oldRow }) {
+    if (eventType === 'INSERT') {
+      if (!allTasks.find(t => t.id === row.id)) {
+        allTasks.unshift(row);
+        renderTasks();
+      }
+    } else if (eventType === 'UPDATE') {
+      const idx = allTasks.findIndex(t => t.id === row.id);
+      if (idx > -1) allTasks[idx] = row;
+      else allTasks.unshift(row);
+      renderTasks();
+    } else if (eventType === 'DELETE') {
+      allTasks = allTasks.filter(t => t.id !== oldRow.id);
+      renderTasks();
+    }
+  }
+
+  // ─── DATA ───
+  async function loadAll() {
+    await Promise.all([loadNotes(), loadTasks()]);
+  }
+
+  async function loadNotes() {
+    const { data, error } = await sb.from('notes').select('*')
+      .order('pinned', { ascending: false })
+      .order('updated_at', { ascending: false });
+    if (error) { toast('Failed to load notes'); return; }
+    allNotes = data || [];
+    renderNotes();
+    buildTagFilterBar();
+  }
+
+  async function loadTasks() {
+    const { data, error } = await sb.from('tasks').select('*')
+      .order('done', { ascending: true })
+      .order('due_date', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (error) { toast('Failed to load tasks'); return; }
+    allTasks = data || [];
+    renderTasks();
+  }
+
+  // ─── FILTERING ───
+  function filteredNotes() {
+    return allNotes.filter(n => {
+      const spaceOk = currentSpace === 'personal' ? n.user_id === currentUser.id : n.visibility === 'shared';
+      if (!spaceOk) return false;
+      if (!showArchived && n.archived) return false;
+      if (showArchived && !n.archived) return false;
+      if (activeTagFilter) {
+        const tags = parseTags(n.tags);
+        if (!tags.includes(activeTagFilter)) return false;
+      }
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q);
+    });
+  }
+
+  function filteredTasks() {
+    return allTasks.filter(t => {
+      const spaceOk = currentSpace === 'personal' ? t.user_id === currentUser.id : t.visibility === 'shared';
+      if (!spaceOk) return false;
+      if (!searchQuery) return true;
+      return (t.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }
+
+  function parseTags(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(t => t.trim().toLowerCase()).filter(Boolean);
+    return raw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+  }
+
+  // ─── TAG FILTER BAR ───
+  function buildTagFilterBar() {
+    const bar = document.getElementById('tag-filter-bar');
+    const allTags = new Set();
+    allNotes.forEach(n => parseTags(n.tags).forEach(t => allTags.add(t)));
+
+    if (allTags.size === 0) { bar.style.display = 'none'; return; }
+
+    bar.style.display = 'flex';
+    bar.innerHTML = `<span class="tag-filter-label">Filter:</span>
+      <button class="tag-filter-btn ${!activeTagFilter ? 'active' : ''}" onclick="setTagFilter(null, this)">All</button>`;
+    allTags.forEach(tag => {
+      const btn = document.createElement('button');
+      btn.className = `tag-filter-btn ${activeTagFilter === tag ? 'active' : ''}`;
+      btn.textContent = tag;
+      btn.onclick = function() { setTagFilter(tag, this); };
+      bar.appendChild(btn);
+    });
+  }
+
+  function setTagFilter(tag, btn) {
+    activeTagFilter = tag;
+    document.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderNotes();
+  }
+
+  // ─── RENDER ───
+  function renderNotes() {
+    const grid = document.getElementById('notes-grid');
+    const notes = filteredNotes();
+
+    if (notes.length === 0) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        <p>${showArchived ? 'No archived notes.' : 'No notes yet. Create one!'}</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = notes.map(n => {
+      const preview = (n.content || '').replace(/[#*`_>~\[\]]/g, '').slice(0, 120);
+      const date = new Date(n.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const isOwner = n.user_id === currentUser.id;
+      const tags = parseTags(n.tags);
+      const tagsHtml = tags.length ? `<div class="note-card-tags">${tags.map(t => `<span class="note-tag">${escHtml(t)}</span>`).join('')}</div>` : '';
+      return `
+        <div class="note-card ${n.pinned ? 'pinned' : ''} ${n.archived ? 'archived-card' : ''}" onclick="openNoteEditor('${n.id}')">
+          ${n.pinned ? '<span class="note-pin-icon">📌</span>' : ''}
+          ${n.archived ? '<span class="note-archived-icon">📦</span>' : ''}
+          <div class="note-card-title">${escHtml(n.title || 'Untitled')}</div>
+          <div class="note-card-preview">${escHtml(preview) || '<em style="opacity:0.5">No content</em>'}</div>
+          ${tagsHtml}
+          <div class="note-card-footer">
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+              <span class="note-card-date">${date}</span>
+              <span class="visibility-pill ${n.visibility === 'shared' ? 'vis-shared' : 'vis-personal'}">${n.visibility === 'shared' ? 'Team' : 'Mine'}</span>
+              ${n.visibility === 'shared' && n.creator_email ? `<span class="creator-label">${n.creator_email.split('@')[0]}</span>` : ''}
+            </div>
+            ${isOwner ? `<div class="note-card-actions" onclick="event.stopPropagation()">
+              <button class="btn-icon" title="Archive" onclick="quickArchiveNote('${n.id}', ${n.archived})">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4zM3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
+              </button>
+              <button class="btn-icon" title="Delete" onclick="quickDeleteNote('${n.id}')">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+              </button>
+            </div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderTasks() {
+    const list = document.getElementById('task-list');
+    const tasks = filteredTasks();
+    document.getElementById('task-count').textContent = tasks.filter(t => !t.done).length;
+
+    if (tasks.length === 0) {
+      list.innerHTML = `<div class="empty-state">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p>No tasks here.</p>
+      </div>`;
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    list.innerHTML = tasks.map(t => {
+      const overdue = t.due_date && t.due_date < today && !t.done;
+      const dueLabel = t.due_date ? formatDate(t.due_date) : '';
+      const isOwner = t.user_id === currentUser.id;
+      const assigneeInitials = t.assignee ? t.assignee.slice(0, 2).toUpperCase() : '';
+      return `
+        <div class="task-item">
+          <input type="checkbox" class="task-check" ${t.done ? 'checked' : ''} onchange="toggleTask('${t.id}', this.checked)" />
+          <div class="task-body">
+            <div class="task-title ${t.done ? 'done' : ''}">${escHtml(t.title)}</div>
+            <div class="task-meta">
+              <span class="priority-badge priority-${t.priority}">${t.priority}</span>
+              ${dueLabel ? `<span class="due-date ${overdue ? 'overdue' : ''}">${overdue ? '⚠ ' : ''}${dueLabel}</span>` : ''}
+              ${t.assignee ? `<span class="assignee-badge" title="${escHtml(t.assignee)}">${escHtml(assigneeInitials)}</span>` : ''}
+              ${t.visibility === 'shared' ? `<span class="visibility-pill vis-shared">Team</span>` : ''}
+              ${t.visibility === 'shared' && t.creator_email ? `<span class="creator-label">${t.creator_email.split('@')[0]}</span>` : ''}
+            </div>
+          </div>
+          ${isOwner ? `<div class="task-actions">
+            <button class="btn-icon" title="Delete" onclick="deleteTask('${t.id}')">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            </button>
+          </div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // ─── TASKS CRUD ───
+  async function addTask() {
+    const titleEl = document.getElementById('new-task-input');
+    const title = titleEl.value.trim();
+    if (!title) return;
+    const addBtn = titleEl.closest('.add-task-row').querySelector('button');
+    addBtn.disabled = true;
+    const priority = document.getElementById('new-task-priority').value;
+    const due_date = document.getElementById('new-task-due').value || null;
+    const assignee = document.getElementById('new-task-assignee').value || null;
+    const visibility = document.getElementById('new-task-visibility').value;
+    const { data, error } = await sb.from('tasks').insert({
+      title, priority, due_date, assignee, visibility,
+      user_id: currentUser.id, creator_email: currentUser.email, done: false
+    }).select().single();
+    addBtn.disabled = false;
+    if (error) { toast('Failed to add task'); return; }
+    if (!allTasks.find(t => t.id === data.id)) allTasks.unshift(data);
+    titleEl.value = '';
+    document.getElementById('new-task-due').value = '';
+    document.getElementById('new-task-assignee').value = '';
+    renderTasks();
+    toast('Task added');
+  }
+
+  async function toggleTask(id, done) {
+    const { error } = await sb.from('tasks').update({ done }).eq('id', id);
+    if (error) { toast('Failed to update task'); return; }
+    const t = allTasks.find(t => t.id === id);
+    if (t) t.done = done;
+    renderTasks();
+  }
+
+  async function deleteTask(id) {
+    if (!confirm('Delete this task?')) return;
+    const { error } = await sb.from('tasks').delete().eq('id', id);
+    if (error) { toast('Failed to delete task'); return; }
+    allTasks = allTasks.filter(t => t.id !== id);
+    renderTasks();
+    toast('Task deleted');
+  }
+
+  // ─── NOTES CRUD ───
+  function openNoteEditor(id) {
+    editingNoteId = id;
+    const overlay = document.getElementById('editor-overlay');
+
+    if (id) {
+      const note = allNotes.find(n => n.id === id);
+      if (!note) return;
+      const isOwner = note.user_id === currentUser.id;
+      document.getElementById('note-title-input').value = note.title || '';
+      document.getElementById('note-content-input').value = note.content || '';
+      document.getElementById('note-visibility').value = note.visibility || 'personal';
+      document.getElementById('note-tags-input').value = parseTags(note.tags).join(', ');
+      document.getElementById('note-pinned').checked = note.pinned || false;
+      document.getElementById('note-delete-btn').style.display = isOwner ? 'inline-flex' : 'none';
+      document.getElementById('note-archive-btn').style.display = (isOwner && !note.archived) ? 'inline-flex' : 'none';
+      document.getElementById('note-unarchive-btn').style.display = (isOwner && note.archived) ? 'inline-flex' : 'none';
+      document.getElementById('note-save-btn').style.display = isOwner ? 'inline-flex' : 'none';
+      document.getElementById('note-creator-label').textContent = note.creator_email ? `by ${note.creator_email}` : '';
+      document.getElementById('note-title-input').readOnly = !isOwner;
+      document.getElementById('note-content-input').readOnly = !isOwner;
+      document.getElementById('note-visibility').disabled = !isOwner;
+      document.getElementById('note-tags-input').readOnly = !isOwner;
+      document.getElementById('note-pinned').disabled = !isOwner;
+    } else {
+      document.getElementById('note-title-input').value = '';
+      document.getElementById('note-content-input').value = '';
+      document.getElementById('note-visibility').value = currentSpace === 'shared' ? 'shared' : 'personal';
+      document.getElementById('note-tags-input').value = '';
+      document.getElementById('note-pinned').checked = false;
+      document.getElementById('note-delete-btn').style.display = 'none';
+      document.getElementById('note-archive-btn').style.display = 'none';
+      document.getElementById('note-unarchive-btn').style.display = 'none';
+      document.getElementById('note-save-btn').style.display = 'inline-flex';
+      document.getElementById('note-creator-label').textContent = '';
+      ['note-title-input','note-content-input','note-tags-input'].forEach(id => document.getElementById(id).readOnly = false);
+      document.getElementById('note-visibility').disabled = false;
+      document.getElementById('note-pinned').disabled = false;
+    }
+
+    switchEditorTab('write');
+    overlay.classList.add('open');
+    setTimeout(() => document.getElementById('note-title-input').focus(), 50);
+  }
+
+  function closeNoteEditor() {
+    document.getElementById('editor-overlay').classList.remove('open');
+    editingNoteId = null;
+  }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('editor-overlay')) closeNoteEditor();
+  }
+
+  async function saveNote() {
+    const title = document.getElementById('note-title-input').value.trim();
+    const content = document.getElementById('note-content-input').value;
+    const visibility = document.getElementById('note-visibility').value;
+    const pinned = document.getElementById('note-pinned').checked;
+    const tagsRaw = document.getElementById('note-tags-input').value;
+    const tags = parseTags(tagsRaw);
+    if (!title) { toast('Title required'); return; }
+    const saveBtn = document.getElementById('note-save-btn');
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+
+    const resetSaveBtn = () => { saveBtn.disabled = false; saveBtn.textContent = 'Save'; };
+
+    if (editingNoteId) {
+      const note = allNotes.find(n => n.id === editingNoteId);
+      if (note && note.user_id !== currentUser.id) { toast('You can only edit your own notes'); resetSaveBtn(); return; }
+      const { data, error } = await sb.from('notes')
+        .update({ title, content, visibility, pinned, tags, updated_at: new Date().toISOString() })
+        .eq('id', editingNoteId).select().single();
+      if (error) { toast('Failed to save'); resetSaveBtn(); return; }
+      const idx = allNotes.findIndex(n => n.id === editingNoteId);
+      if (idx > -1) allNotes[idx] = data;
+    } else {
+      const { data, error } = await sb.from('notes').insert({
+        title, content, visibility, pinned, tags,
+        user_id: currentUser.id, creator_email: currentUser.email,
+        archived: false, updated_at: new Date().toISOString()
+      }).select().single();
+      if (error) { toast('Failed to save'); resetSaveBtn(); return; }
+      if (!allNotes.find(n => n.id === data.id)) allNotes.unshift(data);
+    }
+
+    saveBtn.disabled = false; saveBtn.textContent = 'Save';
+    closeNoteEditor();
+    renderNotes();
+    buildTagFilterBar();
+    toast('Note saved');
+  }
+
+  async function archiveNote() {
+    if (!editingNoteId) return;
+    const btn = document.getElementById('note-archive-btn');
+    btn.disabled = true;
+    const { data, error } = await sb.from('notes').update({ archived: true }).eq('id', editingNoteId).select().single();
+    btn.disabled = false;
+    if (error) { toast('Failed to archive'); return; }
+    const idx = allNotes.findIndex(n => n.id === editingNoteId);
+    if (idx > -1) allNotes[idx] = data;
+    closeNoteEditor();
+    renderNotes();
+    toast('Note archived');
+  }
+
+  async function unarchiveNote() {
+    if (!editingNoteId) return;
+    const btn = document.getElementById('note-unarchive-btn');
+    btn.disabled = true;
+    const { data, error } = await sb.from('notes').update({ archived: false }).eq('id', editingNoteId).select().single();
+    btn.disabled = false;
+    if (error) { toast('Failed to unarchive'); return; }
+    const idx = allNotes.findIndex(n => n.id === editingNoteId);
+    if (idx > -1) allNotes[idx] = data;
+    closeNoteEditor();
+    renderNotes();
+    toast('Note restored');
+  }
+
+  async function quickArchiveNote(id, currentlyArchived) {
+    const archived = !currentlyArchived;
+    const { data, error } = await sb.from('notes').update({ archived }).eq('id', id).select().single();
+    if (error) { toast('Failed'); return; }
+    const idx = allNotes.findIndex(n => n.id === id);
+    if (idx > -1) allNotes[idx] = data;
+    renderNotes();
+    toast(archived ? 'Note archived' : 'Note restored');
+  }
+
+  async function deleteNote() {
+    if (!editingNoteId) return;
+    if (!confirm('Delete this note permanently?')) return;
+    const { error } = await sb.from('notes').delete().eq('id', editingNoteId);
+    if (error) { toast('Failed to delete'); return; }
+    allNotes = allNotes.filter(n => n.id !== editingNoteId);
+    closeNoteEditor();
+    renderNotes();
+    buildTagFilterBar();
+    toast('Note deleted');
+  }
+
+  async function quickDeleteNote(id) {
+    if (!confirm('Delete this note permanently?')) return;
+    const { error } = await sb.from('notes').delete().eq('id', id);
+    if (error) { toast('Failed to delete'); return; }
+    allNotes = allNotes.filter(n => n.id !== id);
+    renderNotes();
+    buildTagFilterBar();
+    toast('Note deleted');
+  }
+
+  function toggleShowArchived() {
+    showArchived = !showArchived;
+    const btn = document.getElementById('archive-toggle-btn');
+    btn.textContent = showArchived ? 'Hide archived' : 'Show archived';
+    btn.classList.toggle('active', showArchived);
+    activeTagFilter = null;
+    buildTagFilterBar();
+    renderNotes();
+  }
+
+  // ─── UI CONTROLS ───
+  function switchTab(tab) {
+    currentTab = tab;
+    ['board','notes','tasks'].forEach(t => document.getElementById(`tab-${t}`).classList.toggle('active', t === tab));
+    document.getElementById('tasks-panel').style.display = (tab === 'board' || tab === 'tasks') ? 'flex' : 'none';
+    document.getElementById('notes-area').style.display = (tab === 'board' || tab === 'notes') ? 'flex' : 'none';
+  }
+
+  function switchSpace(space) {
+    currentSpace = space;
+    document.getElementById('space-personal').classList.toggle('active', space === 'personal');
+    document.getElementById('space-shared').classList.toggle('active', space === 'shared');
+    document.getElementById('notes-space-label').textContent = space === 'shared' ? 'Team Notes' : 'My Notes';
+    // Keep task and note visibility dropdowns in sync with the active space
+    document.getElementById('new-task-visibility').value = space;
+    activeTagFilter = null;
+    buildTagFilterBar();
+    renderNotes();
+    renderTasks();
+  }
+
+  function switchEditorTab(tab) {
+    const textarea = document.getElementById('note-content-input');
+    const preview = document.getElementById('note-preview');
+    document.getElementById('etab-write').classList.toggle('active', tab === 'write');
+    document.getElementById('etab-preview').classList.toggle('active', tab === 'preview');
+    if (tab === 'preview') {
+      preview.innerHTML = DOMPurify.sanitize(marked.parse(textarea.value || ''));
+      preview.style.display = 'block';
+      textarea.style.display = 'none';
+    } else {
+      preview.style.display = 'none';
+      textarea.style.display = 'block';
+      textarea.focus();
+    }
+  }
+
+  function handleSearch(q) {
+    searchQuery = q.trim();
+    renderNotes();
+    renderTasks();
+  }
+
+  // ─── UTILS ───
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  function escHtml(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    const diff = Math.ceil((d - today) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff === -1) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeNoteEditor();
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      if (document.getElementById('editor-overlay').classList.contains('open')) saveNote();
+    }
+  });
+</script>
+</body>
+</html>
