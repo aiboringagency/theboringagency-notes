@@ -838,13 +838,16 @@
     const due_date = document.getElementById('new-task-due').value || null;
     const assignee = document.getElementById('new-task-assignee').value || null;
     const visibility = document.getElementById('new-task-visibility').value;
-    const { data, error } = await sb.from('tasks').insert({
+    const newTask = {
       title, priority, due_date, assignee, visibility,
       user_id: currentUser.id, creator_email: currentUser.email, done: false
-    }).select().single();
+    };
+    const { error } = await sb.from('tasks').insert(newTask);
     addBtn.disabled = false;
-    if (error) { toast('Failed to add task'); return; }
-    if (!allTasks.find(t => t.id === data.id)) allTasks.unshift(data);
+    if (error) { toast('Failed to add task: ' + error.message); console.error(error); return; }
+    // Build a local optimistic object so we don't need a re-fetch
+    const optimistic = { ...newTask, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+    if (!allTasks.find(t => t.id === optimistic.id)) allTasks.unshift(optimistic);
     titleEl.value = '';
     document.getElementById('new-task-due').value = '';
     document.getElementById('new-task-assignee').value = '';
@@ -942,17 +945,19 @@
       const { data, error } = await sb.from('notes')
         .update({ title, content, visibility, pinned, tags, updated_at: new Date().toISOString() })
         .eq('id', editingNoteId).select().single();
-      if (error) { toast('Failed to save'); resetSaveBtn(); return; }
+      if (error) { toast('Failed to save: ' + error.message); resetSaveBtn(); return; }
       const idx = allNotes.findIndex(n => n.id === editingNoteId);
       if (idx > -1) allNotes[idx] = data;
     } else {
-      const { data, error } = await sb.from('notes').insert({
+      const newNote = {
         title, content, visibility, pinned, tags,
         user_id: currentUser.id, creator_email: currentUser.email,
         archived: false, updated_at: new Date().toISOString()
-      }).select().single();
-      if (error) { toast('Failed to save'); resetSaveBtn(); return; }
-      if (!allNotes.find(n => n.id === data.id)) allNotes.unshift(data);
+      };
+      const { error } = await sb.from('notes').insert(newNote);
+      if (error) { toast('Failed to save: ' + error.message); resetSaveBtn(); return; }
+      const optimistic = { ...newNote, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+      if (!allNotes.find(n => n.id === optimistic.id)) allNotes.unshift(optimistic);
     }
 
     saveBtn.disabled = false; saveBtn.textContent = 'Save';
