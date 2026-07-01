@@ -4,6 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TBA Notes</title>
+  <!-- ── PWA / iOS Add to Home Screen ── -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="TBA Notes" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -505,6 +514,34 @@
     document.getElementById('live-dot').className = 'live-dot';
     currentUser = null;
   }
+
+  // Check for existing session immediately on load — avoids login flash on PWA reopen.
+  (async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      currentUser = session.user;
+      currentSpace = 'personal';
+      currentTab = 'board';
+      showArchived = false;
+      activeTagFilter = null;
+      searchQuery = '';
+      document.getElementById('space-personal').classList.add('active');
+      document.getElementById('space-shared').classList.remove('active');
+      document.getElementById('notes-space-label').textContent = 'My Notes';
+      document.getElementById('archive-toggle-btn').textContent = 'Show archived';
+      document.getElementById('archive-toggle-btn').classList.remove('active');
+      document.getElementById('search-input').value = '';
+      switchTab(isMobile() ? 'notes' : 'board');
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      const email = currentUser.email || '';
+      document.getElementById('user-avatar').textContent = email.slice(0, 2).toUpperCase();
+      document.getElementById('user-email-label').textContent = email;
+      populateAssigneeDropdown();
+      await loadAll();
+      setupRealtime();
+    }
+  })();
 
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
